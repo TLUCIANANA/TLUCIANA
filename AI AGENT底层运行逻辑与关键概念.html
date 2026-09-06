@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-page-node-id="bFia49Tu0IlmeuNQWubzDf">
+<head data-page-node-id="YE1ftN2Pm3HLX2apbgJoCE">
+<meta charset="UTF-8" data-page-node-id="fVskJhOTAWpbPa2zIvEOm4">
+<meta name="viewport" content="width=device-width, initial-scale=1" data-page-node-id="EN8pQ84XsnogNliTxNBXGi">
+<title>AI Agent 底层运行逻辑与关键概念全解</title>
+<style>
+  :root{
+    --ink:#1c1c1a; --ink2:#5f5e5a; --ink3:#888780;
+    --line:#e3e1da; --bg:#ffffff; --surface:#f7f6f2;
+    --purple:#534ab7; --purple-bg:#eeedfe;
+    --teal:#0f6e56; --teal-bg:#e1f5ee;
+    --amber:#854f0b; --amber-bg:#faeeda;
+    --blue:#185fa5; --blue-bg:#e6f1fb;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; background:var(--surface); color:var(--ink);
+    font-family:"PingFang SC","Microsoft YaHei",-apple-system,"Segoe UI",sans-serif;
+    line-height:1.75; font-size:15px;
+  }
+  .wrap{max-width:860px; margin:0 auto; padding:56px 28px 80px; background:var(--bg); min-height:100vh;}
+  h1{font-size:28px; font-weight:600; letter-spacing:-0.3px; margin:0 0 8px;}
+  .sub{color:var(--ink2); font-size:14px; margin:0 0 40px;}
+  h2{font-size:20px; font-weight:600; margin:48px 0 14px; padding-bottom:10px; border-bottom:1px solid var(--line);}
+  h3{font-size:16px; font-weight:600; margin:28px 0 8px;}
+  p{margin:10px 0;}
+  ul,ol{margin:10px 0; padding-left:22px;}
+  li{margin:6px 0;}
+  code{background:var(--surface); padding:1px 6px; border-radius:4px; font-size:13px; font-family:"SFMono-Regular",Consolas,monospace;}
+  .lead{font-size:16px; color:var(--ink2);}
+  .card{background:var(--surface); border:1px solid var(--line); border-radius:12px; padding:18px 22px; margin:18px 0;}
+  .analogy{border-left:3px solid var(--amber); background:var(--amber-bg); padding:12px 18px; border-radius:0 8px 8px 0; margin:14px 0; font-size:14.5px;}
+  .term{font-weight:600;}
+  table{width:100%; border-collapse:collapse; margin:18px 0; font-size:14px;}
+  th,td{border:1px solid var(--line); padding:10px 12px; text-align:left; vertical-align:top;}
+  th{background:var(--surface); font-weight:600;}
+  .loop{display:flex; flex-wrap:wrap; gap:8px; margin:18px 0;}
+  .step{flex:1 1 150px; background:var(--purple-bg); border:1px solid #cecbf6; border-radius:10px; padding:12px 14px;}
+  .step b{display:block; font-size:14px; color:#3c3489;}
+  .step span{font-size:12.5px; color:#534ab7;}
+  .kv{display:grid; grid-template-columns:120px 1fr; gap:6px 16px; font-size:14px; margin:10px 0;}
+  .kv div:nth-child(odd){color:var(--ink2);}
+  .foot{margin-top:56px; padding-top:20px; border-top:1px solid var(--line); color:var(--ink3); font-size:13px;}
+  .tag{display:inline-block; background:var(--blue-bg); color:#0c447c; border-radius:6px; padding:2px 8px; font-size:12.5px; margin-right:6px;}
+</style>
+</head>
+<body data-page-node-id="bkw3EXNZwVBV7sFclzSLDE">
+<div class="wrap" data-page-node-id="FKReXpKQ0zwlYVMULxwAHs">
+
+<h1 data-page-node-id="Ya7c8d4cHcUBHaZPTyBTKO">AI Agent 底层运行逻辑与关键概念</h1>
+<p class="sub" data-page-node-id="PG30rkUPHa5jn7gQc2TogC">从感知到反思的完整闭环 · 核心概念逐个拆解 · 与对话模型及工作流的边界</p>
+
+<p class="lead" data-page-node-id="mUkr5V78YSeo3dSWuBOMDA">如果说大语言模型是一颗会思考的大脑，那么 Agent 就是给这颗大脑装上五官、手脚、笔记本和一整套工作流程后形成的"能干活的系统"。本文先讲整体机制，再逐个拆零件。</p>
+
+<h2 data-page-node-id="lrFCYXQCmLPqczvtobX5Qm">一、整体机制：一个不停打转的循环</h2>
+
+<p data-page-node-id="AJrHSMBZQHWE7zngy3g26m">Agent 的工作方式不是"输入→输出"的一条直线，而是一个<strong data-page-node-id="SasqIwtrJqtG0mIrBRd9Gw">闭环</strong>。学界和工业界给它起了不少名字：agent loop、ReAct loop、think-act-observe cycle。剥掉术语，它就是下面这五步不断重复：</p>
+
+<div class="loop" data-page-node-id="TDJfMwhWaVBDHdXGhzItkF">
+  <div class="step" data-page-node-id="DezddPnaTmJ0wl0rCCtAKz"><b data-page-node-id="zSyGFBDtpaemYPp9O6NR6b">1 · 感知</b><span data-page-node-id="iHDD38xzQG5bhjs7qL6dOI">接收指令、环境状态、工具回执</span></div>
+  <div class="step" data-page-node-id="D7m4wP67rz1SxY0Tlvgrog"><b data-page-node-id="HA7Acl3FuktXagyUNk76bO">2 · 规划</b><span data-page-node-id="QlO7J4kZSPJx1sO1juJiha">把目标拆成可执行的步骤</span></div>
+  <div class="step" data-page-node-id="c0BAxIij6XwM2ORIy2MVif"><b data-page-node-id="FkhtdpOn2Zb39wM6cuEwMF">3 · 调用</b><span data-page-node-id="9yCtalfBmeLiQnwXcPtKwI">输出结构化的工具调用意图</span></div>
+  <div class="step" data-page-node-id="6GwIgJst3a4f49yAEHUS81"><b data-page-node-id="tGEFRn26fqwjKb6BT279jz">4 · 执行观察</b><span data-page-node-id="W6DjJuXd8Kt0Q6xhA0Wo83">运行时真正执行并回收结果</span></div>
+  <div class="step" data-page-node-id="dW2wDdJRYbrgIRbHslxZqr"><b data-page-node-id="OJQBJm5iZQvFCE3J2LNWDo">5 · 反思迭代</b><span data-page-node-id="0doozxh8zqVJdzHsB6URKt">评估结果，改写计划或收工</span></div>
+</div>
+
+<div class="analogy" data-page-node-id="SExFHXKOdwvnbdG1ZjzHGM"><b data-page-node-id="bGoTn7oVC5B0eTNgDjrtwg">类比</b>：这像一个厨师做一道没做过的菜 —— 看冰箱里有什么（感知）→ 脑子里排个流程（规划）→ 让助手去拿酱油（调用）→ 尝一口汤（观察）→ 觉得太咸，加水还是换方案（反思）。</div>
+
+<h3 data-page-node-id="7VAJ3qGGr4bGO7iotgJR0Y">1. 感知输入 Perception</h3>
+<p data-page-node-id="gJAB0h8FCvkIndTvRbNZgA">模型真正"看到"的东西，是一次调用时拼装出来的完整提示词，通常包含：<span class="term" data-page-node-id="jMzt7WfD8L5CSVzA8HM2Xd">系统提示词</span>（角色、边界、输出规范）+ <span class="term" data-page-node-id="bkzlq1FPCdSHk8mner8x01">工具 schema</span>（有哪些工具、参数是什么）+ <span class="term" data-page-node-id="XL6Yy3PF6hDXb3RZp1IxHX">召回的记忆</span> + <span class="term" data-page-node-id="uSVbCLNYAT1hB2rIsGzzAn">历史对话与中间步骤</span> + <span class="term" data-page-node-id="wkU4dgvf6B5nw0KGrUVFSd">当前用户输入与环境观测</span>。</p>
+<p data-page-node-id="7zST1eHvRxZDIRlpJ2TciU">这一步定义了 Agent 的<strong data-page-node-id="lHnN1TVo8jlTqPVlKYmkA5">世界边界</strong>：没被喂进上下文的信息，对它而言不存在。</p>
+
+<h3 data-page-node-id="BAWtt3oPUL9LjzEizPtMa7">2. 任务规划 Planning</h3>
+<p data-page-node-id="WEaZgjQVXAAB4RlUC8uBsD">把模糊意图翻译成步骤序列。常见范式：</p>
+<ul data-page-node-id="pGf5D3QnsQyjYzj06yBooX">
+  <li data-page-node-id="tqxoCUiUE43WHLkMy5GFy4"><span class="term" data-page-node-id="STlLTUalZlPDhxOr4ftsgR">CoT（Chain of Thought）</span>：先一步步写出推理再作答。</li>
+  <li data-page-node-id="drJSc59dpH8NEd4vEz2wNL"><span class="term" data-page-node-id="fJTEeSqxW2c3bg8A0s0er3">ReAct</span>：Thought（思考）→ Action（行动）→ Observation（观察）循环交替，思考与行动互相校正。</li>
+  <li data-page-node-id="ps3UQQi85BMoBhjUFE9yL9"><span class="term" data-page-node-id="xYYskeaGZxdK4aNKWMOZZy">ToT（Tree of Thoughts）</span>：同时展开多条思路，评估后择优，必要时回溯。</li>
+  <li data-page-node-id="AJBDxR9X9OTSOEazNeFgx7"><span class="term" data-page-node-id="rvlIFvJAZEiHPo3y39ZVlF">Plan-and-Execute</span>：先产出完整计划，再逐步执行，中途允许 replan。</li>
+</ul>
+<p data-page-node-id="8aJbHXiiIoMODnF0q1wgNn">子任务之间往往构成一张 <span class="term" data-page-node-id="YFKxdVqz4i4g8jyn5NT8As">DAG（有向无环图）</span>：能并行的并行，有依赖的排队。</p>
+
+<h3 data-page-node-id="H6qKq4G1MYCQmNRp05Dc4I">3. 工具调用 Tool / Function Calling</h3>
+<p data-page-node-id="HBlUnLEAJDQvE20fDeBM87">模型<strong data-page-node-id="utPUKhOn7NANCmnFBVcBNV">不执行</strong>任何代码。它输出的是一份结构化意图，例如：</p>
+<div class="card" data-page-node-id="ihPAao49ojmsqFt7tHdJ6v"><code data-page-node-id="1R5rMIhY8IPAxQKOFnaCqC">{"name":"query_train","args":{"from":"北京","to":"上海","date":"2026-09-10"}}</code></div>
+<p data-page-node-id="hJFXixAcsGp58dou8Ov54J">随后由<span class="term" data-page-node-id="QDPBfRjGy7AWGmBduZKpMn">编排层（orchestrator / runtime）</span>接手：校验参数 → 鉴权 → 在沙箱中真正调用 → 捕获超时与异常 → 返回结果。这个分工带来四个工程红利：可审计、可鉴权、可重试、可测试。</p>
+
+<h3 data-page-node-id="0UAp2sflYBMVAZ81OCvCfH">4. 执行与观察 Observation</h3>
+<p data-page-node-id="6MuujiX2Z9Z5NmuSS3kdgr">工具回执（数据、报错、部分结果、环境变化）被写回上下文，成为下一轮推理的新证据。工程上必须做<strong data-page-node-id="GEWGZiWo8mdcwEqEElbHC7">结果裁剪与截断</strong>——一次糟糕的 SQL 全表返回就能撑爆上下文。</p>
+
+<h3 data-page-node-id="3qHY3gSRDaKdTYbrkbC6zG">5. 反思与终止 Reflection &amp; Termination</h3>
+<p data-page-node-id="KJKNLVIhinhrpOMIZ4CTTR">判断"这一步有效吗、目标达成了吗、要不要换路"。终止条件通常是四选一：目标达成、步数预算耗尽、连续失败、需要人工确认（human-in-the-loop）。</p>
+
+<h2 data-page-node-id="RyGl7z2KMPlixcb47Co5FQ">二、核心概念逐个拆</h2>
+
+<h3 data-page-node-id="SMARTIHIy4iDhcV0kHMQJH">2.1 规划与任务拆解</h3>
+<div class="kv" data-page-node-id="v4vaojtZtMYLXLrmYkCzKG">
+  <div data-page-node-id="ca28JP0DTjmGPZ6mKqfd5U">定义</div><div data-page-node-id="zGteIBAnHSh5RsCHvcHlk9">将高层目标递归分解为可验证、可执行的原子子任务。</div>
+  <div data-page-node-id="l0DVGV2CFzxgf3aEGgTCBW">作用</div><div data-page-node-id="Qz55Wv1guSx5mpdUz1LsHA">降低单步难度、支持并行、让失败可定位到具体环节。</div>
+  <div data-page-node-id="1hNlGSFEB5qxSpniSbKPSJ">关键点</div><div data-page-node-id="bD40DpFNCllvo7vmF6EyzH">计划必须是"活的"——每次观察后都允许重写，僵化的计划是 Agent 失败的首要原因。</div>
+  <div data-page-node-id="Szj0WEDTDaXSyCFPyFJEUz">类比</div><div data-page-node-id="C8w3mzUqf7i3XPJtyN5fqo">总厨写菜单、排火候、分配灶台，而不是自己切所有的菜。</div>
+</div>
+
+<h3 data-page-node-id="DFWP7EcynJ8gD9oSyk6jpB">2.2 工具与函数调用</h3>
+<div class="kv" data-page-node-id="Om3uCLbaOD6FCB6kC7LOOg">
+  <div data-page-node-id="bh3kWRmBEi03DAfbrixgIg">定义</div><div data-page-node-id="0Bgr2v7y8RmYWNWDxOIZ2d">用 JSON Schema 声明外部能力，由模型产出调用意图、由运行时执行。</div>
+  <div data-page-node-id="iFrMlxYE60OUDqtQWdT6PH">作用</div><div data-page-node-id="tsFu7mAcWxxeBaZ50D0Cz0">突破模型的两大天花板：知识截止时间，以及无法产生真实副作用（发邮件、下单、写库）。</div>
+  <div data-page-node-id="enBzGobuJDValttTggzGjn">关键点</div><div data-page-node-id="efLI0npPWZyA7bkkCXSzup">工具描述写得越好，调用越准；工具数量过多会造成选择困难，通常需要分层或检索式挂载。</div>
+  <div data-page-node-id="5nv0uNDY1SQ2gU5YWffGqG">类比</div><div data-page-node-id="ytprVjvVU2zwsTxskBKp5q">大脑不下厨，只递出一张写清楚的点菜单。</div>
+</div>
+
+<h3 data-page-node-id="CPAJKkD0mnOfeC8GHbKltH">2.3 记忆机制</h3>
+<p data-page-node-id="vFz1uOG3jrCgt0m5HB4apA">模型本身无状态，Agent 的"记忆"全部由外部系统重建：</p>
+<ul data-page-node-id="ZSpXOY5hzagiWMkTdacriy">
+  <li data-page-node-id="CKahO9tFHd7dlNu8xKHqfG"><span class="term" data-page-node-id="K7qP5gA6Qz92fBYh9d1EVX">工作记忆</span>：上下文窗口内的内容。快、贵、容量有限、进程结束即失。</li>
+  <li data-page-node-id="8q736pPeQvCRDmCEzJGbR0"><span class="term" data-page-node-id="K6EPdmty3NMvX9UM6EdLPZ">长期记忆</span>：向量库、关系库、文件。通过 embedding 语义检索按需召回，也存放用户画像与历史任务摘要。</li>
+  <li data-page-node-id="H4HAb7TrNipA5g05ZM3MC5"><span class="term" data-page-node-id="QwQl4FHQsf7Thms0vvpj2b">程序记忆</span>：SOP、工具用法说明、成功过的执行轨迹库，相当于"肌肉记忆"。</li>
+</ul>
+<div class="analogy" data-page-node-id="gvML50OelocpZJOVrCcEiC"><b data-page-node-id="2LrwEgKfI8jEzsHRjH6MfF">类比</b>：工作记忆是你此刻盯着的桌面，长期记忆是档案室，程序记忆是你不用想就会系鞋带的手感。</div>
+
+<h3 data-page-node-id="jsBCz2wy1D42xcg3fz6cV6">2.4 上下文管理</h3>
+<p data-page-node-id="0ABuXDqUe36A82IZKRArA9">上下文是 Agent 最稀缺的资源。四板斧：</p>
+<ol data-page-node-id="AnBLTjzD1ATrDDhU4B9Rt1">
+  <li data-page-node-id="8A0DJsyEn22whZBcZfnSui"><span class="term" data-page-node-id="EhdcI9hOMkcprnnxx8TDIh">裁剪</span>：丢弃过老的轮次与已失效的中间结果。</li>
+  <li data-page-node-id="3ux2iEKVjsDg1GzD1EzNvU"><span class="term" data-page-node-id="xmGzzrUOSh9jMlffeRMu69">压缩</span>：把长历史递归摘要成一段高信息密度的文字。</li>
+  <li data-page-node-id="XYwNFSWUNZiIP1F7UFFrbV"><span class="term" data-page-node-id="NRjeAIUnZqX2vL6qsX2CVN">排序</span>：重要信息放头尾（注意 lost-in-the-middle 效应，模型对中段记忆最弱）。</li>
+  <li data-page-node-id="qbGwvsn740FFb3dOvW2sii"><span class="term" data-page-node-id="Kp8sLY4lH7ABZI1cYvscHx">隔离</span>：子任务交给子 Agent，各自持有独立上下文，只回传结论。</li>
+</ol>
+
+<h3 data-page-node-id="pvZLZfixSWxLG9VdU1kTce">2.5 反思与自我修正</h3>
+<ul data-page-node-id="mjbZxmSfBGFjJVGeDkOYyp">
+  <li data-page-node-id="cJB9Tn4bV5NAy5CeZo6mZF"><span class="term" data-page-node-id="gwAA8NdXUjdWS8y1v1nHiH">单步反思</span>：每步执行后即时自评有效性。</li>
+  <li data-page-node-id="tiZwwwPuUv8e5CAnh1RoxH"><span class="term" data-page-node-id="U8ZkA3J0u3mTddvBxYAc5L">轨迹级反思</span>：失败后把原因写成自然语言"经验"存入记忆，下次同类任务先读经验（Reflexion 一类思路）。</li>
+  <li data-page-node-id="x0JLBk8tLXbhK1JLmqbxBX"><span class="term" data-page-node-id="deqeTcAOMJSUG5erJAC5Lt">外部验证器</span>：单元测试、规则校验、或另一个模型当裁判——比纯自我批评可靠得多。</li>
+</ul>
+
+<h3 data-page-node-id="OjstKZddB4PfGPTNT4enx1">2.6 多 Agent 协作</h3>
+<p data-page-node-id="1FA4V2Nqw2tKFy4TLMMLrK">三种主流拓扑：</p>
+<ul data-page-node-id="AxdysxSx3xIn6C0rglumd3">
+  <li data-page-node-id="jxggO3xOXzaXbdDU1vEtkO"><span class="term" data-page-node-id="J7pcJQBniZ10UgbtHYETOH">流水线</span>：调研 → 写作 → 审校，串行接力，适合可顺序拆分的任务。</li>
+  <li data-page-node-id="UQEGxI3xNeMwmLzVwwQ2tY"><span class="term" data-page-node-id="Xr3XJAMBeKSi98cEeYUsQu">主从编排</span>：一个 Orchestrator 分发子任务给多个并行 Worker，再汇总结果。</li>
+  <li data-page-node-id="CAcYTe3aXEIsFdK6FMWxAO"><span class="term" data-page-node-id="JqBz1bu2pjaxt1G5zKm6fa">圆桌评审</span>：多角色（正方 / 反方 / 专家）围绕共享黑板产出，由仲裁者定稿，适合对抗式提质量。</li>
+</ul>
+<p data-page-node-id="RUW2BonQmPUdBgIaVYmWCK">协作依赖三件事：共享状态（黑板 / 工作区 / 数据库）、结构化消息协议、清晰的输出契约。代价是成本成倍上升、错误跨 Agent 传播、调试难度陡增。<strong data-page-node-id="4gkWJ8XTVkCeNbZP9Xpdul">能用单 Agent 解决就不要上多 Agent。</strong></p>
+
+<h2 data-page-node-id="u9reSTyqUT7TGr5Akz3zac">三、三者之别</h2>
+<table data-page-node-id="TAxmB5XAx9P12HRwSvGoSV">
+  <tr data-page-node-id="W3rOgn0cezFFsGUi0XD7oi"><th data-page-node-id="LobeABpacGxiCeA7LFlRau">维度</th><th data-page-node-id="QaNWohzjuSoQbuJ0TPcvQJ">对话模型</th><th data-page-node-id="LfxDrksy7YYwivDuQofnXP">传统工作流</th><th data-page-node-id="kPKmciAS2YtF0hVig1qKGC">AI Agent</th></tr>
+  <tr data-page-node-id="BuERJ4tyWDTqn9aG9FYHcC"><td data-page-node-id="9FkfxxMkmHcnUxHtYF7CAn">驱动方式</td><td data-page-node-id="4flEg55JrU4esvEYsYNXET">输入→输出</td><td data-page-node-id="lrp44nYXQfqNEKdbEss3uS">预先画好的流程图</td><td data-page-node-id="L94UvQcqN4CNI6HvCrUiWL">目标驱动，运行时自主寻路</td></tr>
+  <tr data-page-node-id="4A5CCnJcoGJenoeAyyHqIp"><td data-page-node-id="2cxd15XQqDNr1rgHAEZMdD">路径</td><td data-page-node-id="WJXQPOChJDjTsWHoBXFuZ4">无路径概念</td><td data-page-node-id="jbG8Pe1ZgptF2aTgMlqCNu">完全确定，分支写死</td><td data-page-node-id="sivNkoDspnjDhYCCwQHSxl">不确定，动态生成与重写</td></tr>
+  <tr data-page-node-id="Lo4DZB2NGCei3bHBX4sXbP"><td data-page-node-id="GF9jFBePiEVZFIYq3eEFPB">工具使用</td><td data-page-node-id="DyxZZ0ZeeCfM1LlsU0AbR6">通常不能</td><td data-page-node-id="eYIPAGPvAXU1lwJOcY0bxB">能，但调用点在编码期固定</td><td data-page-node-id="tp8iNuy9357xaWL4Fe2r1z">能，调用什么由模型决定</td></tr>
+  <tr data-page-node-id="QfLRitCIcdEH41C1S7z2Iv"><td data-page-node-id="otkWaHuAU19WfJdl7jVlf9">面对异常</td><td data-page-node-id="AEHiuPFdmXH3W8ZAcrScU1">编造或道歉</td><td data-page-node-id="bhmtRAH9OdTAwEMJEZdYSI">报错中断</td><td data-page-node-id="yCdhw3TZYICcIpK4DYJUuy">换工具、改参数、换路线</td></tr>
+  <tr data-page-node-id="wtig0ibKd3rfI8gBfHfoAI"><td data-page-node-id="jGDGjD9uVFDzgKARqYg3OH">状态记忆</td><td data-page-node-id="x1ELWBYy1tw3waSfBB8dXu">会话内上下文</td><td data-page-node-id="4qBdh0JWXgsEbTZVyIRMxM">外部状态机</td><td data-page-node-id="02Q7H5CdnVohnGNPwAKrWr">分层记忆 + 主动检索</td></tr>
+  <tr data-page-node-id="caSzdvHH7YarKJwzBJCYBQ"><td data-page-node-id="zvXUiDDsbxvPW0f96ZA3Dw">适合场景</td><td data-page-node-id="wkCXFOmUTyYPj5MzaA2f7w">问答、写作、解释</td><td data-page-node-id="JIYJqlOBd77tOg6XMoOtFu">高稳定强合规的固定流程</td><td data-page-node-id="ySptnasfcbZVJ653Rz5idO">路径未知的开放任务</td></tr>
+</table>
+
+<div class="analogy" data-page-node-id="n5F4vhKB0LS4oDdET2RsPM"><b data-page-node-id="vsDEJAF5pohcQqR6dv4Fgm">一句话总结</b>：工作流是铁轨，对话模型是播音员，Agent 是司机。铁轨不会错但去不了没轨道的地方；播音员能说会道但不动手；司机哪儿都能去，代价是偶尔走错路——所以你要给他地图（工具）、仪表盘（观察）和刹车（终止条件 + 人工介入）。</div>
+
+<h2 data-page-node-id="MbxEwqxt86k5jF8ejnEFhf">四、落地时的六个真实约束</h2>
+<ul data-page-node-id="FctE0xS5ON4yhG0JBVVka6">
+  <li data-page-node-id="hoCPCA7nqJqUX8Kk4txAZE"><span class="term" data-page-node-id="yH8bQrPMmnbwa6IuuJlqXE">成本</span>：一次任务可能触发几十次模型调用，预算控制与缓存是必修课。</li>
+  <li data-page-node-id="CbN1BwGuKT986KmHU2DknI"><span class="term" data-page-node-id="3MNh2lDyLnlJh6upihWXHH">可靠性</span>：错误会沿链路累积，需要重试、幂等、检查点与可回放的执行日志。</li>
+  <li data-page-node-id="5xQKqZ3y0vLgVDMgskNxnw"><span class="term" data-page-node-id="VKEqu8Z1FWn3G9f9seuN2t">安全</span>：最小权限原则、工具白名单、沙箱执行、危险动作人工确认。</li>
+  <li data-page-node-id="3d4uBcQiYILjDA1N8OLECs"><span class="term" data-page-node-id="XCidGukxiXm4MW1vupmNRG">可观测性</span>：把思考轨迹与工具调用全部落盘，否则无法排查"它为什么这么做"。</li>
+  <li data-page-node-id="PnuhhgFnH1n3HDHCnUUqt3"><span class="term" data-page-node-id="7qtrMo1vFWiThNomqGQz6w">评估</span>：不只看最终答案，还要看过程指标——步数、工具调用成功率、重试率。</li>
+  <li data-page-node-id="gFlFDOinAoTqsAvHIwW7oE"><span class="term" data-page-node-id="rrjPQBChQGuYMlijyX8ujs">确定性边界</span>：能用代码写死的流程就别让模型自由发挥，把不确定性关在最小笼子里。</li>
+</ul>
+
+<div class="foot" data-page-node-id="xudQB3DIpkShoupyUjNrwl">
+  <span class="tag" data-page-node-id="Ik0kcxHAaEgGs4VMUX3Tcd">agent loop</span><span class="tag" data-page-node-id="cL962aYBnEGHM52Wn9MxtR">ReAct</span><span class="tag" data-page-node-id="kAvXrq7UY4ZyDfzz0QUyD9">function calling</span><span class="tag" data-page-node-id="vdKZGEGfX9gSW2JJIbL7C3">context engineering</span><span class="tag" data-page-node-id="ktTlvInwLuDB30sMt62NPf">multi-agent</span><br data-page-node-id="VcSS9FWjQ99WgJV0cujP3p">
+  整理于 2026-09-05 · 概念与机制说明，供学习与架构设计参考
+</div>
+
+</div>
+</body>
+</html>
